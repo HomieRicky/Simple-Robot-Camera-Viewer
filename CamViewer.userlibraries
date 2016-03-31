@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<eclipse-userlibraries>
+  <library name="Python 3.4.1 (C:\Python34\python.exe) interpreter library">
+    <archive path="C:/Python34/DLLs" />
+    <archive path="C:/Python34/Lib" />
+    <archive path="C:/Python34" />
+    <archive path="C:/Python34/Lib/site-packages" />
+    <archive path="C:/Users/Ricardo/.IntelliJIdea14/system/python_stubs/-1442825926" />
+  </library>
+  <library name="Remote Python interpreter interpreter library" />
+  <library name="x64" />
+</eclipse-userlibraries>
+
