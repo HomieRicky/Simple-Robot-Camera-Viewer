@@ -2,7 +2,8 @@
 <classpath>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="src" path="src"/>
-	<classpathentry kind="var" path="USER_HOME/Desktop/opencv/build/java/opencv-310.jar" sourcepath="/USER_HOME/Desktop/opencv/build/java/opencv-310.jar"/>
-	<classpathentry kind="lib" path="C:/Users/Ricardo/Desktop/opencv/build/java/opencv-310.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/bin"/>
+	<classpathentry kind="var" path="USER_HOME/Desktop/opencv/build/java/opencv-310.jar"/>
+	<classpathentry kind="var" path="USER_HOME/wpilib/networktables/NetworkTableViewer/lib/networktables-desktop.jar"/>
 	<classpathentry kind="output" path="out/production/CamViewer"/>
 </classpath>

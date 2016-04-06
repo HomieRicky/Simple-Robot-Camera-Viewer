@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component inherit-compiler-output="true" inheritJdk="true">
-	<output-test url="file://$MODULE_DIR$/out/test/CamViewer"/>
+<component inheritJdk="true">
 	<exclude-output/>
 	<contentEntry url="file://$MODULE_DIR$"/>
-	<lib name="opencv-310.jar" scope="COMPILE">
-		<srcroot url="jar://$USER_HOME$/Desktop/opencv/build/java/opencv-310.jar!/"/>
-	</lib>
+	<levels>
+		<level name="bin" value="project"/>
+	</levels>
 </component>

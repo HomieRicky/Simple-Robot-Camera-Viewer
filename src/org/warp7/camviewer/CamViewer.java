@@ -3,8 +3,11 @@ package org.warp7.camviewer;
 import org.opencv.core.*;
 import org.opencv.core.Point;
 import org.opencv.imgproc.Imgproc;
+import org.opencv.videoio.VideoWriter;
 
 import javax.swing.*;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -16,7 +19,7 @@ import java.io.*;
 /**
  * Created by Ricardo on 2016-03-19.
  */
-public class CamViewer extends JFrame implements ActionListener {
+public class CamViewer extends JFrame {
     JPanel containerPanel;
     JLabel image;
     JPanel imgPanel;
@@ -26,26 +29,43 @@ public class CamViewer extends JFrame implements ActionListener {
     public static int yCrossHair = 0;
     JSlider xSlider;
     JSlider ySlider;
-    SliderListener xL;
-    SliderListener yL;
     static final int xHalfScale = 320;
     static final int yHalfScale = 240;
     JButton saveBtn;
 
+    JButton videoBtn;
+    static VideoWriter recorder;
+    static boolean isRecording = false;
+
+    static NetworkTablesHandler nt;
+    static boolean isNTConnected = false;
+    static int drivingSide = -1; //1 = battery first, 0 = intake first
+    static double rpm = 0;
+    static boolean hasBall = false;
+    static boolean isCompressorRunning = false;
+    JLabel rpmLbl;
+    JLabel dirLabel;
+
+    public static Image INTAKES;
+    public static Image BATTERY;
+    public static Image NO_CONNECTION;
+
     public static void main(String args[]) {
         //System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-        if(!loadLib("x64")) {
-            if(!loadLib("x86")) {
-                System.out.println("Couldn't load native libraries!");
-                return;
-            }
-        }
+        findAndLoadResources();
+        recorder = new VideoWriter();
         CamViewer main = new CamViewer();
         //System.out.println(CamViewer.class.getClassLoader().getResource("resources/save.txt").getFile());
         loadState(main);
         USBCameraInputStream stream;
-        if(args.length != 0) stream = new USBCameraInputStream(true, Integer.parseInt(args[0]));
-        else stream = new USBCameraInputStream(30);
+        if(args.length != 0) {
+            stream = new USBCameraInputStream(true, Integer.parseInt(args[0]));
+            nt = new NetworkTablesHandler(main, true);
+        }
+        else {
+            stream = new USBCameraInputStream(30);
+            nt = new NetworkTablesHandler(main, false);
+        }
         Thread t = new Thread(stream);
         t.start();
 
@@ -53,33 +73,92 @@ public class CamViewer extends JFrame implements ActionListener {
         while(true) {
             if(loadedImage != null) {
                 Mat m = bufferedImageToMat(loadedImage);
-                Imgproc.line(m, new Point(0, yHalfScale+yCrossHair), new Point(2*xHalfScale, yHalfScale+yCrossHair), new Scalar(0, 0, 255), 2);
-                Imgproc.line(m, new Point(xHalfScale+xCrossHair, 0), new Point(xHalfScale+xCrossHair, 2*yHalfScale), new Scalar(0, 0, 255), 2);
-                main.image.setIcon(new ImageIcon(matToBufferedImage(m)));
+                if(isRecording) recorder.write(m);
+                Imgproc.line(m, new Point(0, yHalfScale+yCrossHair), new Point(2*xHalfScale, yHalfScale+yCrossHair), new Scalar(0, 0, 255), 4);
+                Imgproc.line(m, new Point(xHalfScale+xCrossHair-(108/2), 0), new Point(xHalfScale+xCrossHair-(108/2), 2*yHalfScale), new Scalar(0, 0, 255), 4);
+                Imgproc.line(m, new Point(xHalfScale+xCrossHair+(108/2), 0), new Point(xHalfScale+xCrossHair+(108/2), 2*yHalfScale), new Scalar(0, 0, 255), 4);
+                AutonHandler ah = new AutonHandler(m);
+                //main.image.setIcon(new ImageIcon(matToBufferedImage(ah.mat)));
+                main.image.setIcon(new ImageIcon(loadedImage));
             }
+
+            if(isNTConnected) {
+                main.rpmLbl.setText("RPM: " + rpm);
+                if(!hasBall) main.containerPanel.setBackground(Color.WHITE);
+                else main.containerPanel.setBackground(Color.ORANGE);
+                if(drivingSide == 0) main.dirLabel.setIcon(new ImageIcon(INTAKES));
+                else if(drivingSide == 1) main.dirLabel.setIcon(new ImageIcon(BATTERY));
+            }
+            if(!t.isAlive()) t = new Thread(stream);
             main.pack();
         }
     }
 
+    private static void findAndLoadResources() {
+        if(!loadLib("x64")) {
+            if(!loadLib("x86")) {
+                System.out.println("Couldn't load native libraries!");
+                return;
+            }
+        }
+        INTAKES = new ImageIcon(CamViewer.class.getClassLoader().getResource("resources/intake.jpg")).getImage();
+        BATTERY = new ImageIcon(CamViewer.class.getClassLoader().getResource("resources/battery.jpg")).getImage();
+        NO_CONNECTION = new ImageIcon(CamViewer.class.getClassLoader().getResource("resources/no_connection.jpg")).getImage();
+
+    }
+
     public CamViewer() {
         super();
-
         imgPanel = new JPanel(new GridLayout(1, 1));
         sliderPanel = new JPanel();
         image = new JLabel();
         imgPanel.add(image);
         xSlider = new JSlider(JSlider.CENTER, -xHalfScale, xHalfScale, 0);
-        xL = new SliderListener(true);
-        xSlider.addChangeListener(xL);
+        xSlider.addChangeListener(new ChangeListener() {
+            @Override
+            public void stateChanged(ChangeEvent e) {
+                JSlider s = (JSlider) e.getSource();
+                xCrossHair = s.getValue();
+            }
+        });
         xSlider.setMajorTickSpacing(10);
         xSlider.setMinorTickSpacing(2);
         ySlider = new JSlider(JSlider.CENTER, -yHalfScale, yHalfScale, 0);
-        yL = new SliderListener(false);
-        ySlider.addChangeListener(yL);
+        ySlider.addChangeListener(new ChangeListener() {
+            @Override
+            public void stateChanged(ChangeEvent e) {
+                JSlider s = (JSlider) e.getSource();
+                yCrossHair = s.getValue();
+            }
+        });
         ySlider.setMajorTickSpacing(10);
         ySlider.setMinorTickSpacing(2);
         saveBtn = new JButton("Save current state");
-        saveBtn.addActionListener(this);
+        saveBtn.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                saveState();
+            }
+        });
+        videoBtn = new JButton("Record video");
+        videoBtn.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                JButton btn = (JButton) e.getSource();
+                if(!isRecording) {
+                    btn.setText("Stop recording");
+                    btn.setBackground(Color.RED);
+                    isRecording = true;
+                } else {
+                    btn.setText("Record video");
+                    btn.setBackground(Color.WHITE);
+                    isRecording = false;
+                }
+                toggleVideo();
+            }
+        });
+        rpmLbl = new JLabel("RPM: ");
+        dirLabel = new JLabel(new ImageIcon(NO_CONNECTION));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -94,13 +173,36 @@ public class CamViewer extends JFrame implements ActionListener {
         mainGbc.gridy = 0;
         containerPanel.add(imgPanel, mainGbc);
         mainGbc.gridx = 0;
-        mainGbc.gridx = 1;
+        mainGbc.gridy = 1;
         containerPanel.add(sliderPanel, mainGbc);
-        containerPanel.setPreferredSize(new Dimension(640, 540));
+        mainGbc.gridy = 2;
+        containerPanel.add(videoBtn, mainGbc);
+        mainGbc.gridx = 1;
+        containerPanel.add(dirLabel);
+        mainGbc.gridy = 3;
+        mainGbc.gridx = 1;
+        containerPanel.add(rpmLbl);
+
+        containerPanel.setPreferredSize(new Dimension(640, 640));
         add(containerPanel);
         pack();
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setVisible(true);
+    }
+
+    public void toggleVideo() {
+        if(isRecording) {
+            int fourcc = VideoWriter.fourcc('X', '2', '6', '4');
+            //int fourcc = -1;
+            recorder.open("recording_"+System.currentTimeMillis()+".mp4", -1, 30, new Size(640, 480));
+            System.out.println(fourcc);
+            if(!recorder.isOpened()) {
+                System.out.println("Improper!!");
+            }
+            //recorder.open("recording_"+System.currentTimeMillis()+".AVI", -1, 30, new Size(640, 480));
+        } else {
+            recorder.release();
+        }
     }
 
     public static BufferedImage matToBufferedImage(Mat frame) {
@@ -124,13 +226,6 @@ public class CamViewer extends JFrame implements ActionListener {
         Mat m = new Mat(480, 640, CvType.CV_8UC3);
         m.put(0, 0, pixels);
         return m;
-    }
-
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        if(e.getSource() instanceof JButton) {
-            saveState();
-        }
     }
 
     public void saveState() {
